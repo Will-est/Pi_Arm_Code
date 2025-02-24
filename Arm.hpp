@@ -13,7 +13,7 @@ namespace Arm
             VectorXd transform_to_base_frame(int base_rotation_angle, VectorXd pos);
             MatrixXd arm::calcJacobian(int delta);
             VectorXd arm::get_current_position();
-            arm();
+            arm(int forearm_length, int base_arm_length, int base_height);
 
         private:
             int current_elbow_rotation_angle;

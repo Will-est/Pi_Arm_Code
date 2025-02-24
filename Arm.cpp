@@ -6,9 +6,18 @@ using namespace Eigen;
 
 #define jacobian_step 0.01
 
-arm::arm()
+arm::arm(int forearm_length, int base_arm_length, int base_height) 
+    : forearm_length(forearm_length), base_arm_length(base_arm_length), base_height(base_height) 
 {
-    //initialize servos and stuff
+    // set the angles internal to the arm to 0
+    current_elbow_rotation_angle = 0;
+    current_rotator_rotation_angle = 0;
+    current_base_rotation_angle = 0;
+
+    // sets the angles internal to the servos to zero
+    base_servo.setAngle(0);
+    rotator_servo.setAngle(0);
+    elbow_servo.setAngle(0);
 }
 
 // Function to move the arm to a specified position
