@@ -1,4 +1,5 @@
 #include "Servo.hpp"
+#include <Eigen/Dense>
 
 
 namespace Arm 
