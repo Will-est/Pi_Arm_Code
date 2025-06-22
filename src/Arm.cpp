@@ -6,13 +6,25 @@ using namespace Eigen;
 
 #define jacobian_step 0.01
 
-arm::arm(int forearm_length, int base_arm_length, int base_height) 
-    : forearm_length(forearm_length), base_arm_length(base_arm_length), base_height(base_height) 
+arm::arm(float forearm_length, float base_arm_length, float base_height) 
+    : forearm_length(forearm_length), base_arm_length(base_arm_length), base_height(base_height),
+      base_servo(1, 9), // Example ID and pin
+      rotator_servo(2, 10), // Example ID and pin
+      elbow_servo(3, 11) // Example ID and pin
 {
+
+    // note, I am going to need to have some sort of default/configurable way to set the pins for each of the servos
+
+
     // set the angles internal to the arm to 0
     current_elbow_rotation_angle = 0;
     current_rotator_rotation_angle = 0;
     current_base_rotation_angle = 0;
+
+    // // initializes servos with IDs and pins
+    // base_servo = Servo::servo(1, 9); // Example ID and pin
+    // rotator_servo = Servo::servo(2, 10); // Example ID and
+    // elbow_servo = Servo::servo(3, 11); // Example ID and pin
 
     // sets the angles internal to the servos to zero
     base_servo.setAngle(0);
@@ -21,23 +33,28 @@ arm::arm(int forearm_length, int base_arm_length, int base_height)
 }
 
 // Function to move the arm to a specified position
-void arm::moveToPosition(int target_position[3], int margin_of_error) {
+void arm::moveToPosition(float target_position[3], float margin_of_error) {
 
-    int joint_action[3]; // joint action that will be used to write to servos
-    Vector3d target_position_vec(target_position[0], target_position[1], target_position[2]);
-    Vector3d delta_vector = target_position_vec - get_current_position();
-    int delta = delta_vector.norm();
+    // float joint_action[3]; // joint action that will be used to write to servos
+    // Vector3d target_position_vec(target_position[0], target_position[1], target_position[2]);
+    // Vector3d delta_vector = target_position_vec - get_current_position();
+    // float delta = delta_vector.norm();
+
+    float joint_action[3]; // joint action that will be used to write to servos
+    Vector3f target_position_vec(target_position[0], target_position[1], target_position[2]);
+    Vector3f delta_vector = target_position_vec - get_current_position().cast<float>();
+    float delta = delta_vector.norm();
 
     do
     {
         // gets pseudo-inverse for the joint action
-        MatrixXd jacobian = calcJacobian(jacobian_step); // Assuming delta is 1 for Jacobian calculation
-        MatrixXd jacobian_pseudo_inverse = jacobian.completeOrthogonalDecomposition().pseudoInverse();
-        VectorXd joint_action_vec = jacobian_pseudo_inverse * delta_vector;
+        Matrix3f jacobian = calcJacobian(jacobian_step); // Assuming delta is 1 for Jacobian calculation
+        Matrix3f jacobian_pseudo_inverse = jacobian.completeOrthogonalDecomposition().pseudoInverse();
+        Vector3f joint_action_vec = jacobian_pseudo_inverse * delta_vector;
 
         // translates to joint action vector
         for (int i = 0; i < 3; ++i) {
-            joint_action[i] = static_cast<int>(joint_action_vec[i]);
+            joint_action[i] = static_cast<float>(joint_action_vec[i]);
         }
 
         //writes to servos
@@ -46,14 +63,14 @@ void arm::moveToPosition(int target_position[3], int margin_of_error) {
         elbow_servo.setAngle(joint_action[2]);
 
         // updates delta
-        delta_vector = target_position_vec - get_current_position();
+        delta_vector = target_position_vec - get_current_position().cast<float>();
         delta = delta_vector.norm();
 
     }
     while(delta > margin_of_error);
 }
 
-VectorXd arm::FK(int jointConfig[3]) {
+Vector3f arm::FK(float jointConfig[3]) {
     // Function to perform forward kinematics
     // Implementation goes here
     return transform_to_base_frame( jointConfig[0],
@@ -63,37 +80,37 @@ VectorXd arm::FK(int jointConfig[3]) {
     ); 
 }
 
-VectorXd arm::transform_to_elbow_frame(int elbow_rotation_angle) {
+Vector3f arm::transform_to_elbow_frame(float elbow_rotation_angle) {
     // Function to transform coordinates to the elbow frame
     Vector3f pos(0, 0, 0);
-    current_elbow_rotation_angle = base_rotation_angle * M_PI / 180.0 + current_base_rotation_angle; // Convert angle to radians and updates
-    Transform<float,3,Affine> transform = Translation3f(forearm_length, 0, 0) * AngleAxisf(current_base_rotation_angle, Vector3f::UnitY());
+    current_elbow_rotation_angle = (elbow_rotation_angle * M_PI / 180.0) + current_elbow_rotation_angle; // Convert angle to radians and updates
+    Transform<float,3,Affine> transform = Translation3f(forearm_length, 0, 0) * AngleAxisf(current_elbow_rotation_angle, Vector3f::UnitY());
     return transform * pos;
 }
 
-VectorXd arm::transform_to_rotator_frame(int rotator_rotation_angle, VectorXd pos) {
+Vector3f arm::transform_to_rotator_frame(float rotator_rotation_angle, Vector3f pos) {
     // Function to transform coordinates to the rotator frame
-    current_rotator_rotation_angle = base_rotation_angle * M_PI / 180.0 + current_base_rotation_angle; // Convert angle to radians and updates
-    Transform<float,3,Affine> transform = Translation3f(base_arm_length, 0, 0) * AngleAxisf(current_base_rotation_angle, Vector3f::UnitY());
+    current_rotator_rotation_angle = (rotator_rotation_angle * M_PI / 180.0) + current_rotator_rotation_angle; // Convert angle to radians and updates
+    Transform<float,3,Affine> transform = Translation3f(base_arm_length, 0, 0) * AngleAxisf(current_rotator_rotation_angle, Vector3f::UnitY());
     return transform * pos;
 }
 
-VectorXd arm::transform_to_base_frame(int base_rotation_angle, VectorXd pos) {
+Vector3f arm::transform_to_base_frame(float base_rotation_angle, Vector3f pos) {
     // Function to transform coordinates to the base frame
-    current_base_rotation_angle = base_rotation_angle * M_PI / 180.0 + current_base_rotation_angle; // Convert angle to radians and updates
+    current_base_rotation_angle = (base_rotation_angle * M_PI / 180.0) + current_base_rotation_angle; // Convert angle to radians and updates
     Transform<float,3,Affine> transform = Translation3f(0, 0, base_height) * AngleAxisf(current_base_rotation_angle, Vector3f::UnitY());
     return transform * pos;
 }
 
-MatrixXd arm::calcJacobian(int delta) {
+Matrix3f arm::calcJacobian(float delta) {
     // Function to calculate Jacobians
-    MatrixXd jacobian(3, 3); // 3x3 Jacobian matrix for 3 joints and 3 dimensions (x, y, z)
-    VectorXd current_position = get_current_position();
-    int jointConfig[3] = {current_base_rotation_angle, current_rotator_rotation_angle, current_elbow_rotation_angle};
+    Matrix3f jacobian(3, 3); // 3x3 Jacobian matrix for 3 joints and 3 dimensions (x, y, z)
+    Vector3f current_position = get_current_position();
+    float jointConfig[3] = {current_base_rotation_angle, current_rotator_rotation_angle, current_elbow_rotation_angle};
     for (int i = 0; i < 3; ++i) { // Loop over each joint
-        int original_angle = jointConfig[i];
+        float original_angle = jointConfig[i];
         jointConfig[i] += delta; // Apply small change to the joint angle
-        VectorXd offset_position = FK(jointConfig);
+        Vector3f offset_position = FK(jointConfig);
         jointConfig[i] = original_angle; // Reset the joint angle
 
         for (int j = 0; j < 3; ++j) { // Loop over each dimension (x, y, z)
@@ -103,8 +120,8 @@ MatrixXd arm::calcJacobian(int delta) {
     return jacobian; // Placeholder return value
 }
 
-VectorXd arm::get_current_position() {
-    int jointConfig[3] = {current_base_rotation_angle, current_rotator_rotation_angle, current_elbow_rotation_angle};
+Vector3f arm::get_current_position() {
+    float jointConfig[3] = {current_base_rotation_angle, current_rotator_rotation_angle, current_elbow_rotation_angle};
     return FK(jointConfig);
 }
 

@@ -1,28 +1,29 @@
 #include "Servo.hpp"
 #include <Eigen/Dense>
 
+#pragma once
 
 namespace Arm 
 {
     class arm 
     {
         public:
-            void moveToPosition(int target_position[3], int margin_of_error);
-            VectorXd FK(int jointConfig[]);
-            VectorXd transform_to_elbow_frame(int elbow_rotation_angle );
-            VectorXd transform_to_rotator_frame(int rotator_rotation_angle, VectorXd pos);
-            VectorXd transform_to_base_frame(int base_rotation_angle, VectorXd pos);
-            MatrixXd arm::calcJacobian(int delta);
-            VectorXd arm::get_current_position();
-            arm(int forearm_length, int base_arm_length, int base_height);
+            void moveToPosition(float target_position[3], float margin_of_error);
+            Eigen::Vector3f FK(float jofloatConfig[]);
+            Eigen::Vector3f transform_to_elbow_frame(float elbow_rotation_angle );
+            Eigen::Vector3f transform_to_rotator_frame(float rotator_rotation_angle, Eigen::Vector3f pos);
+            Eigen::Vector3f transform_to_base_frame(float base_rotation_angle, Eigen::Vector3f pos);
+            Eigen::Matrix3f calcJacobian(float delta);
+            Eigen::Vector3f get_current_position();
+            arm(float forearm_length, float base_arm_length, float base_height);
 
         private:
-            int current_elbow_rotation_angle;
-            int current_rotator_rotation_angle;
-            int current_base_rotation_angle;    
-            int forearm_length;
-            int base_arm_length;
-            int base_height;
+            float current_elbow_rotation_angle;
+            float current_rotator_rotation_angle;
+            float current_base_rotation_angle;    
+            float forearm_length;
+            float base_arm_length;
+            float base_height;
             Servo::servo base_servo;
             Servo::servo rotator_servo;
             Servo::servo elbow_servo;

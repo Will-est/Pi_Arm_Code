@@ -1,3 +1,4 @@
+#pragma once
 
 namespace Servo
 {
@@ -6,11 +7,11 @@ namespace Servo
         private:
             int id;
             int pin;
-            int angle;
+            float angle;
 
         public:
             servo(int id, int pin);
-            void setAngle(int theta);
-            int getAngle();
-    }
+            void setAngle(float theta);
+            float getAngle();
+    };
 }
