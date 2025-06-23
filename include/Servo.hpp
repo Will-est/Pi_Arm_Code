@@ -1,7 +1,10 @@
 #pragma once
 
+extern bool gpio_init_flag;
+
 namespace Servo
 {
+    
     class servo
     {
         private:
