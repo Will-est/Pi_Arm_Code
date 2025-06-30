@@ -11,7 +11,7 @@ include_directories(include)
 
 # Find Eigen
 find_package(Eigen3 REQUIRED)
-find_library(PIGPIO_LIBRARY pigpio)
+find_library(PIGPIO_LIBRARY pigpio REQUIRED)
 
 # Find source files
 file(GLOB SOURCES "src/*.cpp")
