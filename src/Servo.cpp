@@ -14,7 +14,8 @@ servo::servo(int pin, int id) : pin(pin), id(id), angle(0)
         // Initialize GPIO pin for servo control
         if (gpioInitialise() < 0) {
             // Handle initialization error
-            std::cout << "The init code didn't work" << std::endl;
+            std::cerr << "The init code didn't work" << std::endl;
+            throw std::runtime_error("Failed to initialize GPIO");
             return;
         }
         else
