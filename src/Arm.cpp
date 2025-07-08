@@ -1,10 +1,11 @@
 #include "Servo.hpp"
 #include "Arm.hpp"
+#include <iostream>
 
 using namespace Arm;
 using namespace Eigen;
 
-#define jacobian_step 0.01
+#define jacobian_step 0.0001
 
 arm::arm(float forearm_length, float base_arm_length, float base_height) 
     : forearm_length(forearm_length), base_arm_length(base_arm_length), base_height(base_height),
@@ -20,12 +21,7 @@ arm::arm(float forearm_length, float base_arm_length, float base_height)
     current_elbow_rotation_angle = 0;
     current_rotator_rotation_angle = 0;
     current_base_rotation_angle = 0;
-
-    // // initializes servos with IDs and pins
-    // base_servo = Servo::servo(1, 9); // Example ID and pin
-    // rotator_servo = Servo::servo(2, 10); // Example ID and
-    // elbow_servo = Servo::servo(3, 11); // Example ID and pin
-
+    
     // sets the angles internal to the servos to zero
     base_servo.setAngle(0);
     rotator_servo.setAngle(0);
@@ -66,11 +62,12 @@ void arm::moveToPosition(float target_position[3], float margin_of_error) {
         delta_vector = target_position_vec - get_current_position().cast<float>();
         delta = delta_vector.norm();
 
+        std::cout << "current position:\n " << get_current_position() << std::endl;
     }
     while(delta > margin_of_error);
 }
 
-Vector3f arm::FK(float jointConfig[3]) {
+Vector3f arm::FK(float* jointConfig) {
     // Function to perform forward kinematics
     // Implementation goes here
     return transform_to_base_frame( jointConfig[0],
@@ -84,21 +81,21 @@ Vector3f arm::transform_to_elbow_frame(float elbow_rotation_angle) {
     // Function to transform coordinates to the elbow frame
     Vector3f pos(0, 0, 0);
     current_elbow_rotation_angle = (elbow_rotation_angle * M_PI / 180.0) + current_elbow_rotation_angle; // Convert angle to radians and updates
-    Transform<float,3,Affine> transform = Translation3f(forearm_length, 0, 0) * AngleAxisf(current_elbow_rotation_angle, Vector3f::UnitY());
-    return transform * pos;
+    Transform<float,3,Affine> transform = AngleAxisf(current_elbow_rotation_angle, Vector3f::UnitY()) * Translation3f(forearm_length, 0, 0);
+    return (transform * pos);
 }
 
 Vector3f arm::transform_to_rotator_frame(float rotator_rotation_angle, Vector3f pos) {
     // Function to transform coordinates to the rotator frame
     current_rotator_rotation_angle = (rotator_rotation_angle * M_PI / 180.0) + current_rotator_rotation_angle; // Convert angle to radians and updates
-    Transform<float,3,Affine> transform = Translation3f(base_arm_length, 0, 0) * AngleAxisf(current_rotator_rotation_angle, Vector3f::UnitY());
+    Transform<float,3,Affine> transform = AngleAxisf(current_rotator_rotation_angle, Vector3f::UnitY()) * Translation3f(base_arm_length, 0, 0);
     return transform * pos;
 }
 
 Vector3f arm::transform_to_base_frame(float base_rotation_angle, Vector3f pos) {
     // Function to transform coordinates to the base frame
     current_base_rotation_angle = (base_rotation_angle * M_PI / 180.0) + current_base_rotation_angle; // Convert angle to radians and updates
-    Transform<float,3,Affine> transform = Translation3f(0, 0, base_height) * AngleAxisf(current_base_rotation_angle, Vector3f::UnitY());
+    Transform<float,3,Affine> transform = AngleAxisf(current_base_rotation_angle, Vector3f::UnitY()) * Translation3f(0, 0, base_height) ;
     return transform * pos;
 }
 
@@ -121,7 +118,7 @@ Matrix3f arm::calcJacobian(float delta) {
 }
 
 Vector3f arm::get_current_position() {
-    float jointConfig[3] = {current_base_rotation_angle, current_rotator_rotation_angle, current_elbow_rotation_angle};
+    float jointConfig[3] = {0, 0, 0};
     return FK(jointConfig);
 }
 

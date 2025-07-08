@@ -1,14 +1,17 @@
 #include "Servo.hpp"
+#include "Arm.hpp"
 #include <iostream>
 
 
 int main()
 {
-     std::cout << "hello world" << std::endl;
-    Servo::servo myservo(1, 9);
-    myservo.setAngle(45.0);
-    while(1)
-    {
-    }
+    
+    // Initialize the arm with example lengths
+    Arm::arm myArm(1.0f, 1.0f, 1.0f);     
+
+    float goal_pose[] = {0.5f, 0.5f, 0.5f};
+    myArm.moveToPosition(goal_pose,0.001);
+    
+
     return 0;
 }
