@@ -29,10 +29,10 @@ servo::servo(int pin, int id) : pin(pin), id(id), angle(0)
     gpioSetMode(pin, PI_OUTPUT);
 }
 
-void servo::setAngle(float theta)
+void servo::setAngle(float theta) 
 {
     // convert radians to Pulse width
-    int pulse = (int) (theta * ( 2500 / 180));
+    int pulse = (int) (theta * ( 2500 / 3.1415926535));
 
     // clips angles to 0 - 180 (consider adding print statment here to say if we clipped)
     if (pulse < 0) {

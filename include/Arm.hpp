@@ -13,14 +13,16 @@ namespace Arm
             Eigen::Vector3f transform_to_elbow_frame(float elbow_rotation_angle );
             Eigen::Vector3f transform_to_rotator_frame(float rotator_rotation_angle, Eigen::Vector3f pos);
             Eigen::Vector3f transform_to_base_frame(float base_rotation_angle, Eigen::Vector3f pos);
-            Eigen::Matrix3f calcJacobian(float delta);
+            Eigen::Matrix3f calcJacobian(float delta, float* target_position);
             Eigen::Vector3f get_current_position();
+            Eigen::Vector3f get_distance(Eigen::Vector3f current_pos, Eigen::Vector3f goal_pos);  
+            void write_to_joints(float* joint_actions);                                    
             arm(float forearm_length, float base_arm_length, float base_height);
 
         private:
             float current_elbow_rotation_angle;
             float current_rotator_rotation_angle;
-            float current_base_rotation_angle;    
+            float current_base_rotation_angle;                             
             float forearm_length;
             float base_arm_length;
             float base_height;
