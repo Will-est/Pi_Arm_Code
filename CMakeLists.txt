@@ -12,7 +12,7 @@ include_directories(include)
 
 # Find Eigen
 find_package(Eigen3 REQUIRED)
-find_library(PIGPIO_LIBRARY pigpio REQUIRED)
+# find_library(PIGPIO_LIBRARY pigpio REQUIRED)
 
 # Find source files
 file(GLOB SOURCES "src/*.cpp")
@@ -22,7 +22,7 @@ add_executable(pi_arm ${SOURCES})
 
 # Include Eigen headers
 target_include_directories(pi_arm PRIVATE ${EIGEN3_INCLUDE_DIR})
-target_link_libraries(pi_arm ${PIGPIO_LIBRARY})
+# target_link_libraries(pi_arm ${PIGPIO_LIBRARY})
 
 # Installation rules
 install(TARGETS pi_arm DESTINATION "executables")

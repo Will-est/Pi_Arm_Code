@@ -6,7 +6,8 @@
 using namespace Arm;
 using namespace Eigen;
 
-#define jacobian_step 0.00001
+#define jacobian_step 0.01
+#define clip_constant 0.1
 
 arm::arm(float forearm_length, float base_arm_length, float base_height) 
     : forearm_length(forearm_length), base_arm_length(base_arm_length), base_height(base_height),
@@ -19,7 +20,7 @@ arm::arm(float forearm_length, float base_arm_length, float base_height)
 
 
     // set the angles internal to the arm to 0
-    current_elbow_rotation_angle = 0;
+    current_elbow_rotation_angle = 0.5;
     current_rotator_rotation_angle = 0;
     current_base_rotation_angle = 0;
     
@@ -41,7 +42,13 @@ void arm::moveToPosition(float target_position[3], float margin_of_error) {
         // gets pseudo-inverse for the joint action
         Matrix3f jacobian = calcJacobian(jacobian_step, target_position); // Assuming delta is 1 for Jacobian calculation
         Matrix3f jacobian_pseudo_inverse = jacobian.completeOrthogonalDecomposition().pseudoInverse();
-        Vector3f joint_action_vec = (jacobian_pseudo_inverse * distance_vector);
+        Vector3f joint_action_vec = jacobian_pseudo_inverse * distance_vector;
+
+        // Limit the step size to prevent huge jumps
+        float max_step = 0.1; // Maximum step size in radians
+        if (joint_action_vec.norm() > max_step) {
+            joint_action_vec = joint_action_vec.normalized() * max_step;
+        }
 
         // translates to joint action vector
         for (int i = 0; i < 3; ++i) {
@@ -49,14 +56,13 @@ void arm::moveToPosition(float target_position[3], float margin_of_error) {
         }
 
         //writes to servos
-        base_servo.setAngle(joint_action[0]);
-        rotator_servo.setAngle(joint_action[1]);
-        elbow_servo.setAngle(joint_action[2]);
+        write_to_joints(joint_action);
 
         // updates delta
         distance_vector = get_distance(get_current_position().cast<float>(), target_position_vec);
 
         std::cout << "current position:\n " << get_current_position() << std::endl;
+        std::cout << "the norm is: " << distance_vector.norm() << std::endl;
     }
     while(distance_vector.norm() > margin_of_error);
 }                                   
@@ -94,31 +100,29 @@ Vector3f arm::transform_to_base_frame(float base_rotation_angle, Vector3f pos) {
 }
 
 Matrix3f arm::calcJacobian(float delta, float* target_position) {
-    // Function to calculate Jacobians
-
-    Eigen::Vector3f goal_pos(target_position[0], target_position[1], target_position[2]);
+    // Function to calculate Jacobians using central difference method
 
     Matrix3f jacobian(3, 3); // 3x3 Jacobian matrix for 3 joints and 3 dimensions (x, y, z)
     float jointConfig_plus[3] = {current_base_rotation_angle, current_rotator_rotation_angle, current_elbow_rotation_angle};
     float jointConfig_minus[3] = {current_base_rotation_angle, current_rotator_rotation_angle, current_elbow_rotation_angle};
+    
     for (int i = 0; i < 3; ++i) { // Loop over each joint
         float original_angle = jointConfig_plus[i]; // sets the original angle
 
-        jointConfig_plus[i] += delta; // Apply small change to the joint angle
-        jointConfig_minus[i] -= delta; // Apply small change to the joint angle
+        // Apply positive and negative deltas
+        jointConfig_plus[i] += delta;
+        jointConfig_minus[i] -= delta;
 
         Vector3f offset_position_plus = FK(jointConfig_plus);
         Vector3f offset_position_minus = FK(jointConfig_minus);
-        jointConfig_plus[i] = original_angle; // Reset the plus joint angle
-        jointConfig_minus[i] = original_angle; // Reset the minus joint angle
-
+        
+        // Reset joint angles
+        jointConfig_plus[i] = original_angle;
+        jointConfig_minus[i] = original_angle;
 
         for (int j = 0; j < 3; ++j) { // Loop over each dimension (x, y, z)
-
-            float plus_delt = abs(goal_pos[j] - offset_position_plus[j]);
-            float minus_delt = abs(goal_pos[j] - offset_position_minus[j]);
-
-            jacobian(j, i) = (plus_delt - minus_delt) / (delta*2);
+            // Central difference formula for numerical derivative
+            jacobian(j, i) = (offset_position_plus[j] - offset_position_minus[j]) / (2 * delta);
         }
     }
     std::cout << "The jacobian is:\n " << jacobian << std::endl;
@@ -126,14 +130,13 @@ Matrix3f arm::calcJacobian(float delta, float* target_position) {
 }
 
 Vector3f arm::get_current_position() {
-    float jointConfig[3] = {0, 0, 0};
+    float jointConfig[3] = {current_base_rotation_angle, current_rotator_rotation_angle, current_elbow_rotation_angle};
     return FK(jointConfig);
 }
 
 Vector3f arm::get_distance(Vector3f current_pos, Vector3f goal_pos)
 {
     Vector3f result = goal_pos - current_pos;
-    result = result.cwiseAbs();
     return result;
 }
 
@@ -145,7 +148,7 @@ void arm::write_to_joints(float* joint_actions)
     elbow_servo.setAngle(joint_actions[2]);
 
     // updates current joint configuration
-    current_base_rotation_angle += joint_actions[2];
-    current_rotator_rotation_angle += joint_actions[1];
-    current_elbow_rotation_angle += joint_actions[0];
+    current_base_rotation_angle = fmod(current_base_rotation_angle + joint_actions[0], 2 * M_PI); // Ensure angle is within [0, 2π)
+    current_rotator_rotation_angle = fmod(current_rotator_rotation_angle + joint_actions[1], 2 * M_PI);
+    current_elbow_rotation_angle = fmod(current_elbow_rotation_angle + joint_actions[2], 2 * M_PI);
 }
