@@ -1,33 +1,49 @@
-#include "Servo.hpp"
-#include <Eigen/Dense>
-
 #pragma once
+
+#include "Servo.hpp"
+#include <vector>
+#include <Eigen/Dense>
 
 namespace Arm 
 {
+    class Ligament {
+        public:
+            Ligament();
+            Ligament(float rotation[3], float translation[3]);
+            Ligament(float rotation[3], float translation[3], Ligament* forward_attachment, Ligament* backward_attachment);
+            ~Ligament();
+
+            // Rotation as axis-angle representation
+            Eigen::Vector3f rotation;
+            
+            // Translation vector
+            Eigen::Vector3f translation;
+            
+            // Pointers to connected ligaments
+            Ligament* forward_attachment;
+            Ligament* backward_attachment;
+        
+        private:
+            // Add any private members if needed
+    };
+    
     class arm 
     {
         public:
             void moveToPosition(float target_position[3], float margin_of_error);
-            Eigen::Vector3f FK(float jofloatConfig[]);
-            Eigen::Vector3f transform_to_elbow_frame(float elbow_rotation_angle );
-            Eigen::Vector3f transform_to_rotator_frame(float rotator_rotation_angle, Eigen::Vector3f pos);
-            Eigen::Vector3f transform_to_base_frame(float base_rotation_angle, Eigen::Vector3f pos);
-            Eigen::Matrix3f calcJacobian(float delta, float* target_position);
+            Eigen::Vector3f FK(std::vector<float> jointConfig);
+            Eigen::Matrix<float, 3, Eigen::Dynamic> calcJacobian(float delta);
             Eigen::Vector3f get_current_position();
             Eigen::Vector3f get_distance(Eigen::Vector3f current_pos, Eigen::Vector3f goal_pos);  
-            void write_to_joints(float* joint_actions);                                    
-            arm(float forearm_length, float base_arm_length, float base_height);
+            void write_to_joints(Eigen::VectorXf joint_actions, bool write_to_servos);                                    
+            arm(Ligament input_ligament);
+            ~arm();
+
 
         private:
-            float current_elbow_rotation_angle;
-            float current_rotator_rotation_angle;
-            float current_base_rotation_angle;                             
-            float forearm_length;
-            float base_arm_length;
-            float base_height;
-            Servo::servo base_servo;
-            Servo::servo rotator_servo;
-            Servo::servo elbow_servo;
+            Ligament ee_ligament;
+            std::vector<Servo::servo> servos;
+            std::vector<float> joint_positions;
     };
+
 }

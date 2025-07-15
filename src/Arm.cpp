@@ -8,41 +8,63 @@ using namespace Eigen;
 
 #define jacobian_step 0.01
 #define clip_constant 0.1
+#define max_iterations 10000
+#define small_action_threshold 0.001
+#define max_small_joint_action_count 10
 
-arm::arm(float forearm_length, float base_arm_length, float base_height) 
-    : forearm_length(forearm_length), base_arm_length(base_arm_length), base_height(base_height),
-      base_servo(1, 9), // Example ID and pin
-      rotator_servo(2, 10), // Example ID and pin
-      elbow_servo(3, 11) // Example ID and pin
+
+
+// ------------  ARM Code --------------
+
+arm::arm(Ligament input_ligament) 
 {
+    // Set the end-effector ligament
+    ee_ligament = input_ligament;
 
-    // note, I am going to need to have some sort of default/configurable way to set the pins for each of the servos
-
-
-    // set the angles internal to the arm to 0
-    current_elbow_rotation_angle = 0.5;
-    current_rotator_rotation_angle = 0;
-    current_base_rotation_angle = 0;
-    
-    // sets the angles internal to the servos to zero
-    base_servo.setAngle(0);
-    rotator_servo.setAngle(0);
-    elbow_servo.setAngle(0);
+    // initialize servos and their angles
+    int pin = 1;
+    Ligament* current = &ee_ligament; // Initialize current with the end effector
+    do {
+        servos.push_back(Servo::servo(pin)); // creates corresponding to the end of the ligament
+        joint_positions.push_back(0.0f); // initializes joint positions to 0
+        // Move to the next ligament in the chain
+        current = current->backward_attachment;
+        pin++; // Increment pin for the next servo
+    }while(current != nullptr);
 }
 
 // Function to move the arm to a specified position
 void arm::moveToPosition(float target_position[3], float margin_of_error) {
 
-    float joint_action[3]; // joint action that will be used to write to servos
     Vector3f target_position_vec(target_position[0], target_position[1], target_position[2]);
     Vector3f distance_vector = get_distance(get_current_position().cast<float>(), target_position_vec);
-
+    int iteration_count = 0;
+    int small_action_count = 0;
+    
     do
     {
         // gets pseudo-inverse for the joint action
-        Matrix3f jacobian = calcJacobian(jacobian_step, target_position); // Assuming delta is 1 for Jacobian calculation
-        Matrix3f jacobian_pseudo_inverse = jacobian.completeOrthogonalDecomposition().pseudoInverse();
-        Vector3f joint_action_vec = jacobian_pseudo_inverse * distance_vector;
+        Matrix<float, 3, Dynamic> jacobian = calcJacobian(jacobian_step); // Assuming delta is 1 for Jacobian calculation
+        Matrix<float, 3, 3> jacobian_pseudo_inverse = jacobian.completeOrthogonalDecomposition().pseudoInverse();
+        
+        // Calculate joint action using pseudo-inverse of Jacobian
+        VectorXf joint_action_vec = jacobian_pseudo_inverse * distance_vector;
+
+        // Check if the joint action is very small
+        if (joint_action_vec.norm() < small_action_threshold) {
+            small_action_count++;
+            if (small_action_count > max_small_joint_action_count) {
+                // Add a small random perturbation to escape local minimum
+                std::cout << "Adding perturbation to escape local minimum" << std::endl;
+                for (int i = 0; i < joint_action_vec.size(); i++) {
+                    // Add random value between -0.05 and 0.05
+                    joint_action_vec(i) += ((float)rand() / RAND_MAX - 0.5f) * 0.1f;
+                }
+                small_action_count = 0; // Reset counter after perturbation
+            }
+        } else {
+            small_action_count = 0; // Reset counter if action is significant
+        }
 
         // Limit the step size to prevent huge jumps
         float max_step = 0.1; // Maximum step size in radians
@@ -50,63 +72,68 @@ void arm::moveToPosition(float target_position[3], float margin_of_error) {
             joint_action_vec = joint_action_vec.normalized() * max_step;
         }
 
-        // translates to joint action vector
-        for (int i = 0; i < 3; ++i) {
-            joint_action[i] = static_cast<float>(joint_action_vec[i]);
-        }
-
         //writes to servos
-        write_to_joints(joint_action);
+        write_to_joints(joint_action_vec, false);
 
         // updates delta
         distance_vector = get_distance(get_current_position().cast<float>(), target_position_vec);
 
         std::cout << "current position:\n " << get_current_position() << std::endl;
         std::cout << "the norm is: " << distance_vector.norm() << std::endl;
+        
+        // Increment iteration count and check for max iterations
+        iteration_count++;
+        if (iteration_count >= max_iterations) {
+            std::cout << "Maximum iterations reached without convergence." << std::endl;
+            break;
+        }
     }
     while(distance_vector.norm() > margin_of_error);
 }                                   
 
-Vector3f arm::FK(float* jointConfig) {
+Vector3f arm::FK(std::vector<float> jointConfig) {
     // Function to perform forward kinematics
-    // Implementation goes here
-    return transform_to_base_frame( jointConfig[0],
-         transform_to_rotator_frame( jointConfig[1],
-            transform_to_elbow_frame( jointConfig[2] ) 
-        ) 
-    ); 
+    Vector3f pos(0, 0, 0); // Start position in end effector frame
+    Ligament* current_ligament = &ee_ligament;
+    int i = 0;
+
+    // Start with identity transformation
+    Transform<float, 3, Affine> accumulated_transform = Transform<float, 3, Affine>::Identity();
+
+    // Iterate through the ligaments from end effector to base
+    while ( (current_ligament != nullptr) && (i < joint_positions.size()) ) {
+        // Create rotation transformation using joint angle
+        float joint_angle = jointConfig[i];
+        
+        // Get rotation axis and translation from the ligament
+        Vector3f rotation_axis = current_ligament->rotation;
+        Vector3f translation = current_ligament->translation;
+        
+        // Build transformation matrix
+        Transform<float, 3, Affine> transform = 
+            AngleAxisf(joint_angle, rotation_axis) * 
+            Translation3f(translation);
+        
+        // Apply this transformation to our accumulated transform
+        accumulated_transform = transform * accumulated_transform;
+        
+        // Move to the next ligament in the chain
+        current_ligament = current_ligament->backward_attachment;
+        i++;
+    }
+
+    // Apply the accumulated transformation to the initial position
+    return accumulated_transform * pos;
 }
 
-Vector3f arm::transform_to_elbow_frame(float elbow_rotation_angle) {
-    // Function to transform coordinates to the elbow frame
-    Vector3f pos(0, 0, 0);
-    float current_joint_anlge = elbow_rotation_angle + current_elbow_rotation_angle; // Convert angle to radians and updates
-    Transform<float,3,Affine> transform = AngleAxisf(current_joint_anlge, Vector3f::UnitY()) * Translation3f(forearm_length, 0, 0);
-    return (transform * pos);
-}
-
-Vector3f arm::transform_to_rotator_frame(float rotator_rotation_angle, Vector3f pos) {
-    // Function to transform coordinates to the rotator frame
-    float current_joint_anlge = rotator_rotation_angle + current_rotator_rotation_angle; 
-    Transform<float,3,Affine> transform = AngleAxisf(current_joint_anlge, Vector3f::UnitY()) * Translation3f(base_arm_length, 0, 0);
-    return transform * pos;
-}
-
-Vector3f arm::transform_to_base_frame(float base_rotation_angle, Vector3f pos) {
-    // Function to transform coordinates to the base frame
-    float current_joint_anlge = base_rotation_angle + current_base_rotation_angle;
-    Transform<float,3,Affine> transform = AngleAxisf(current_joint_anlge, Vector3f::UnitZ()) * Translation3f(0, 0, base_height) ;
-    return transform * pos;
-}
-
-Matrix3f arm::calcJacobian(float delta, float* target_position) {
+Matrix<float, 3, Dynamic> arm::calcJacobian(float delta) {
     // Function to calculate Jacobians using central difference method
 
-    Matrix3f jacobian(3, 3); // 3x3 Jacobian matrix for 3 joints and 3 dimensions (x, y, z)
-    float jointConfig_plus[3] = {current_base_rotation_angle, current_rotator_rotation_angle, current_elbow_rotation_angle};
-    float jointConfig_minus[3] = {current_base_rotation_angle, current_rotator_rotation_angle, current_elbow_rotation_angle};
+    Matrix<float, 3, Dynamic> jacobian(3, joint_positions.size()); // 3xN Jacobian matrix where N is the number of joints
+    std::vector<float> jointConfig_plus = joint_positions;
+    std::vector<float> jointConfig_minus = joint_positions;
     
-    for (int i = 0; i < 3; ++i) { // Loop over each joint
+    for (int i = 0; i < joint_positions.size(); ++i) { // Loop over each joint
         float original_angle = jointConfig_plus[i]; // sets the original angle
 
         // Apply positive and negative deltas
@@ -126,12 +153,12 @@ Matrix3f arm::calcJacobian(float delta, float* target_position) {
         }
     }
     std::cout << "The jacobian is:\n " << jacobian << std::endl;
-    return jacobian; // Placeholder return value
+    return jacobian;
 }
 
 Vector3f arm::get_current_position() {
-    float jointConfig[3] = {current_base_rotation_angle, current_rotator_rotation_angle, current_elbow_rotation_angle};
-    return FK(jointConfig);
+    
+    return FK(joint_positions);
 }
 
 Vector3f arm::get_distance(Vector3f current_pos, Vector3f goal_pos)
@@ -140,15 +167,74 @@ Vector3f arm::get_distance(Vector3f current_pos, Vector3f goal_pos)
     return result;
 }
 
-void arm::write_to_joints(float* joint_actions)
+void arm::write_to_joints(VectorXf joint_actions, bool write_to_servos) 
 {
-    // writes to servos
-    base_servo.setAngle(joint_actions[0]);
-    rotator_servo.setAngle(joint_actions[1]);
-    elbow_servo.setAngle(joint_actions[2]);
+    // Ensure joint_actions vector is the right size
+    if (joint_actions.size() != joint_positions.size()) {
+        std::cerr << "Error: joint_actions size doesn't match joint_positions size" << std::endl;
+        return;
+    }
+
+    // writes to servos if needed
+    if (write_to_servos) {
+        for (size_t i = 0; i < servos.size(); ++i) {
+            servos[i].setAngle(joint_positions[i] + joint_actions(i));
+        }
+    }
 
     // updates current joint configuration
-    current_base_rotation_angle = fmod(current_base_rotation_angle + joint_actions[0], 2 * M_PI); // Ensure angle is within [0, 2π)
-    current_rotator_rotation_angle = fmod(current_rotator_rotation_angle + joint_actions[1], 2 * M_PI);
-    current_elbow_rotation_angle = fmod(current_elbow_rotation_angle + joint_actions[2], 2 * M_PI);
+    for (size_t i = 0; i < joint_positions.size(); ++i) {
+        joint_positions[i] = fmod(joint_positions[i] + joint_actions(i), 2 * M_PI); // Ensure angle is within [0, 2π)
+    }
+}
+
+arm::~arm() 
+{
+    // Clean up any resources
+    servos.clear();
+    joint_positions.clear();
+
+
+    
+    // Print a message indicating the destructor was called
+    std::cout << "Arm destructor called, resources released." << std::endl;
+}
+
+
+// ------------  Ligament Code --------------
+Ligament::Ligament()
+{
+    this->rotation = Eigen::Vector3f(0.0f, 0.0f, 0.0f);
+    this->translation = Eigen::Vector3f(0.0f, 0.0f, 0.0f);
+    this->forward_attachment = nullptr;
+    this->backward_attachment = nullptr;
+}
+
+Ligament::Ligament(float rotation[3], float translation[3])
+{
+    this->rotation = Eigen::Vector3f(rotation[0], rotation[1], rotation[2]);
+    this->translation = Eigen::Vector3f(translation[0], translation[1], translation[2]);
+    this->forward_attachment = nullptr;
+    this->backward_attachment = nullptr;
+}
+Ligament::Ligament(float rotation[3], float translation[3], Ligament* forward_attachment, Ligament* backward_attachment)
+{
+    this->rotation = Eigen::Vector3f(rotation[0], rotation[1], rotation[2]);
+    this->translation = Eigen::Vector3f(translation[0], translation[1], translation[2]);
+    this->forward_attachment = forward_attachment;
+    this->backward_attachment = backward_attachment;
+    
+    // Connect forward attachment's backward pointer to this ligament
+    if (this->forward_attachment != nullptr) {
+        this->forward_attachment->backward_attachment = this;
+    }
+    
+    // Connect backward attachment's forward pointer to this ligament
+    if (this->backward_attachment != nullptr) {
+        this->backward_attachment->forward_attachment = this;
+    }
+}
+Ligament::~Ligament()
+{
+    // Clean up resources if needed
 }

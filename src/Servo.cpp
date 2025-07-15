@@ -7,7 +7,7 @@ bool gpio_init_flag = false;
 using namespace Servo;
 
 // constructor for servo
-servo::servo(int pin, int id) : pin(pin), id(id), angle(0) 
+servo::servo(int pin) : pin(pin)
 {
     // if(!gpio_init_flag)
     // {
@@ -20,7 +20,7 @@ servo::servo(int pin, int id) : pin(pin), id(id), angle(0)
     //     }
     //     else
     //     {
-    //         std::cout << "The init code did work" << std::endl;
+    //         std::cout << "The init code worked" << std::endl;
     //     }
 
     //     gpio_init_flag = true; // sets flag to prevent gpioInitialize being called later
@@ -42,7 +42,4 @@ void servo::setAngle(float theta)
     }
     // gpioServo(this->pin, pulse);
     // gpioServo(this->pin, pulse); // Adjusting pulse width to start from 500us
-    this->angle += (pulse* 3.1415926535 / 2500); // convert back to radians
 }
-
-float servo::getAngle(){return this->angle;}
