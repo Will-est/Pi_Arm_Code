@@ -32,18 +32,18 @@ namespace Arm
         public:
             void moveToPosition(float target_position[3], float margin_of_error);
             Eigen::Vector3f FK(std::vector<float> jointConfig);
-            Eigen::Matrix<float, 3, Eigen::Dynamic> calcJacobian(float delta);
+            Eigen::Matrix<float, 3, Eigen::Dynamic> calcJacobian(float delta, Eigen::Vector3f target_position_vec);
             Eigen::Vector3f get_current_position();
             Eigen::Vector3f get_distance(Eigen::Vector3f current_pos, Eigen::Vector3f goal_pos);  
             void write_to_joints(Eigen::VectorXf joint_actions, bool write_to_servos);                                    
             arm(Ligament input_ligament);
             ~arm();
+            std::vector<float> joint_positions;
 
 
         private:
             Ligament ee_ligament;
             std::vector<Servo::servo> servos;
-            std::vector<float> joint_positions;
     };
 
 }

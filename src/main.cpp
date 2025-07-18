@@ -23,9 +23,16 @@ int main()
     // Create the arm with the three ligaments
     Arm::arm myArm(ee);
 
-    float target_position[] = {0.5f, 0.5f, 1.0f};
-    myArm.moveToPosition(target_position, 0.1f);
+    float target_position[] = {0.50f, 0.50f, 1.0f};
+    myArm.moveToPosition(target_position, 0.25f);
     std::cout << "my current position is " << myArm.get_current_position() << std::endl;
 
-    return 0;
+    // Print joint positions
+    const auto& joint_positions = myArm.joint_positions;
+    // Print joint positions
+    std::cout << "Joint positions:" << std::endl;
+    for (size_t i = 0; i < joint_positions.size(); ++i) {
+        std::cout << "Joint " << i << ": " 
+                  << joint_positions[i] << std::endl;
+    }
 }

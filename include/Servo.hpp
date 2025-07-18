@@ -9,8 +9,13 @@ namespace Servo
     {
         private:
             int pin;
+            float upper_joint_limit;
+            float lower_joint_limit;
         public:
             servo(int pin);
+            servo(int pin, float upper_joint_limit, float lower_joint_limit);
+            float getMinAngle();
+            float getMaxAngle();
             void setAngle(float theta);
     };
 }
