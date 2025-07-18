@@ -23,7 +23,7 @@ int main()
     // Create the arm with the three ligaments
     Arm::arm myArm(ee);
 
-    float target_position[] = {0.50f, 0.50f, 1.0f};
+    float target_position[] = {1.0f, 1.0f, 1.0f};
     myArm.moveToPosition(target_position, 0.25f);
     std::cout << "my current position is " << myArm.get_current_position() << std::endl;
 

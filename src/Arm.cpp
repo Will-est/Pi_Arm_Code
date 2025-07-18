@@ -58,41 +58,7 @@ void arm::moveToPosition(float target_position[3], float margin_of_error) {
         // applying nullspace projection to the distance vector
 
         // Check for joints near limits and adjust distance vector if needed
-        for (size_t i = 0; i < joint_positions.size(); ++i) {
-            float lower_limit = servos[i].getMinAngle();            // Lower joint limit (0 radians)
-            float upper_limit = servos[i].getMaxAngle();        // Upper joint limit (2π radians)
-
-            // Check if joint is near limits
-            bool near_lower_limit = joint_positions[i] < (lower_limit + 0.1);
-            bool near_upper_limit = joint_positions[i] > (upper_limit - 0.1);
-            
-            if (near_lower_limit || near_upper_limit) {
-                std::cout << "Joint " << i << " near " << (near_lower_limit ? "lower" : "upper") << " limit" << std::endl;
-                
-                
-                // Temporarily modify the joint angle
-                std::vector<float> modified_config = joint_positions;
-                float direction = near_lower_limit ? 1.0f : -1.0f;  // Move away from the limit
-                modified_config[i] += direction * jacobian_step;
-                
-                // Calculate FK for modified joint positions
-                Vector3f modified_pos = FK(modified_config);
-                
-                // Calculate the vector resulting from the joint modification
-                Vector3f joint_limit_vector = (modified_pos - current_position) / jacobian_step;
-
-                // Project this vector onto the nullspace of the Jacobian
-                Matrix<float, Dynamic, Dynamic> null_space = 
-                    Matrix<float, Dynamic, Dynamic>::Identity(joint_positions.size(), joint_positions.size()) - 
-                    jacobian_pseudo_inverse * jacobian;
-
-                // Apply the nullspace projection to your joint_limit_vector
-                VectorXf joint_space_correction = null_space * joint_limit_vector;
-                
-                // Add the correction to the distance vector
-                distance_vector += joint_space_correction;
-            }
-        }
+        distance_vector = constrain_joint_positions(distance_vector, current_position, jacobian, jacobian_pseudo_inverse);
 
 
         // Calculate joint action using pseudo-inverse of Jacobian
@@ -386,6 +352,49 @@ arm::~arm()
     
     // Print a message indicating the destructor was called
     std::cout << "Arm destructor called, resources released." << std::endl;
+}
+
+Vector3f arm::constrain_joint_positions(Vector3f& distance_vector, const Vector3f& current_position, 
+                                   const Matrix<float, 3, Dynamic>& jacobian,
+                                   const Matrix<float, 3, 3>& jacobian_pseudo_inverse)
+{
+    // Check for joints near limits and adjust distance vector if needed
+    for (size_t i = 0; i < joint_positions.size(); ++i) {
+        float lower_limit = servos[i].getMinAngle();            // Lower joint limit (0 radians)
+        float upper_limit = servos[i].getMaxAngle();        // Upper joint limit (2π radians)
+
+        // Check if joint is near limits
+        bool near_lower_limit = joint_positions[i] < (lower_limit + 0.1);
+        bool near_upper_limit = joint_positions[i] > (upper_limit - 0.1);
+        
+        if (near_lower_limit || near_upper_limit) {
+            std::cout << "Joint " << i << " near " << (near_lower_limit ? "lower" : "upper") << " limit" << std::endl;
+            
+            
+            // Temporarily modify the joint angle
+            std::vector<float> modified_config = joint_positions;
+            float direction = near_lower_limit ? 1.0f : -1.0f;  // Move away from the limit
+            modified_config[i] += direction * jacobian_step;
+            
+            // Calculate FK for modified joint positions
+            Vector3f modified_pos = FK(modified_config);
+            
+            // Calculate the vector resulting from the joint modification
+            Vector3f joint_limit_vector = (modified_pos - current_position) / jacobian_step;
+
+            // Project this vector onto the nullspace of the Jacobian
+            Matrix<float, Dynamic, Dynamic> null_space = 
+                Matrix<float, Dynamic, Dynamic>::Identity(joint_positions.size(), joint_positions.size()) - 
+                jacobian_pseudo_inverse * jacobian;
+
+            // Apply the nullspace projection to your joint_limit_vector
+            VectorXf joint_space_correction = null_space * joint_limit_vector;
+            
+            // Add the correction to the distance vector
+            distance_vector += joint_space_correction;
+        }
+    }
+    return distance_vector;
 }
 
 

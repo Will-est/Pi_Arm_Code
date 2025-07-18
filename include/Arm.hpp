@@ -35,7 +35,10 @@ namespace Arm
             Eigen::Matrix<float, 3, Eigen::Dynamic> calcJacobian(float delta, Eigen::Vector3f target_position_vec);
             Eigen::Vector3f get_current_position();
             Eigen::Vector3f get_distance(Eigen::Vector3f current_pos, Eigen::Vector3f goal_pos);  
-            void write_to_joints(Eigen::VectorXf joint_actions, bool write_to_servos);                                    
+            void write_to_joints(Eigen::VectorXf joint_actions, bool write_to_servos);    
+            Eigen::Vector3f constrain_joint_positions(Eigen::Vector3f& distance_vector, const Eigen::Vector3f& current_position, 
+                                   const Eigen::Matrix<float, 3, Eigen::Dynamic>& jacobian,
+                                   const Eigen::Matrix<float, 3, 3>& jacobian_pseudo_inverse);                                
             arm(Ligament input_ligament);
             ~arm();
             std::vector<float> joint_positions;
