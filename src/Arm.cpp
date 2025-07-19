@@ -59,7 +59,7 @@ void arm::moveToPosition(float target_position[3], float margin_of_error) {
         if ((current_position - last_position).norm() < small_action_threshold) {
             small_action_count++;
             if (small_action_count > max_small_joint_action_count) {
-                std::cout << "Adding perturbation to escape local minimum" << std::endl;
+                // std::cout << "Adding perturbation to escape local minimum" << std::endl;
                 for (int i = 0; i < joint_action_vec.size(); i++) {
                     joint_action_vec(i) += ((((float)rand() / RAND_MAX) - 0.5f) * 10.0f);
                 }
@@ -82,8 +82,8 @@ void arm::moveToPosition(float target_position[3], float margin_of_error) {
         current_position = get_current_position().cast<float>();
         distance_vector = get_distance(current_position, target_position_vec);
         
-        std::cout << "current position:\n " << current_position << std::endl;
-        std::cout << "the norm is: " << distance_vector.norm() << std::endl;
+        // std::cout << "current position:\n " << current_position << std::endl;
+        // std::cout << "the norm is: " << distance_vector.norm() << std::endl;
         
         iteration_count++;
     }
@@ -91,6 +91,9 @@ void arm::moveToPosition(float target_position[3], float margin_of_error) {
     if (iteration_count >= max_iterations) {
         std::cout << "Maximum iterations reached without convergence." << std::endl;
     }
+
+    // Final update to servos
+    write_to_joints(VectorXf::Zero(joint_positions.size()), true);
 }
 
 Vector3f arm::FK(std::vector<float> jointConfig) {
@@ -162,7 +165,7 @@ Matrix<float, 3, Dynamic> arm::calcJacobian(float delta, Vector3f target_positio
         }
     }
     
-    std::cout << "Jacobian:\n" << jacobian << std::endl;
+    // std::cout << "Jacobian:\n" << jacobian << std::endl;
     return jacobian;
 }
 
@@ -198,11 +201,11 @@ void arm::write_to_joints(VectorXf joint_actions, bool write_to_servos)
         // Clip angle to servo limits
         if (angle < servos[i].getMinAngle()) {
             angle = servos[i].getMinAngle();
-            std::cout << "Joint " << i << " clipped to min angle: " << angle << std::endl;
+            // std::cout << "Joint " << i << " clipped to min angle: " << angle << std::endl;
         } 
         else if (angle > servos[i].getMaxAngle()) {
             angle = servos[i].getMaxAngle();
-            std::cout << "Joint " << i << " clipped to max angle: " << angle << std::endl;
+            // std::cout << "Joint " << i << " clipped to max angle: " << angle << std::endl;
         }
         
         // Update joint position with possibly clipped value
@@ -222,7 +225,7 @@ arm::~arm()
     joint_positions.clear();
     
     // Print a message indicating the destructor was called
-    std::cout << "Arm destructor called, resources released." << std::endl;
+    // std::cout << "Arm destructor called, resources released." << std::endl;
 }
 
 Vector3f arm::constrain_joint_positions(Vector3f& distance_vector, const Vector3f& current_position, 
@@ -239,7 +242,7 @@ Vector3f arm::constrain_joint_positions(Vector3f& distance_vector, const Vector3
         bool near_upper_limit = joint_positions[i] > (upper_limit - 0.1);
         
         if (near_lower_limit || near_upper_limit) {
-            std::cout << "Joint " << i << " near " << (near_lower_limit ? "lower" : "upper") << " limit" << std::endl;
+            // std::cout << "Joint " << i << " near " << (near_lower_limit ? "lower" : "upper") << " limit" << std::endl;
             
             
             // Temporarily modify the joint angle
