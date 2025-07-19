@@ -13,8 +13,6 @@ using namespace Eigen;
 #define small_action_threshold 0.001
 #define max_small_joint_action_count 50
 
-
-
 // ------------  ARM Code --------------
 
 arm::arm(Ligament input_ligament) 
@@ -34,194 +32,91 @@ arm::arm(Ligament input_ligament)
     }while(current != nullptr);
 }
 
-// Function to move the arm to a specified position
 void arm::moveToPosition(float target_position[3], float margin_of_error) {
-
     Vector3f target_position_vec(target_position[0], target_position[1], target_position[2]);
-    Vector3f distance_vector = get_distance(get_current_position().cast<float>(), target_position_vec);
+    Vector3f current_position = get_current_position().cast<float>();
+    Vector3f last_position = current_position;
+    Vector3f distance_vector = get_distance(current_position, target_position_vec);
+    
     int iteration_count = 0;
     int small_action_count = 0;
     
-
-    // Being descent into correct joint configs
-
-    // Vectors that will be used to check how we progress after each timestep
-    Vector3f current_position = get_current_position().cast<float>();
-    Vector3f last_position = current_position; // Static to persist between iterations
-    do
-    {
-        // gets pseudo-inverse for the joint action
-        Matrix<float, 3, Dynamic> jacobian = calcJacobian(jacobian_step, target_position_vec); // Assuming delta is 1 for Jacobian calculation
+    // Maximum step size in radians to prevent large jumps
+    const float max_step = 0.5;
+    
+    while (distance_vector.norm() > margin_of_error && iteration_count < max_iterations) {
+        // Calculate Jacobian and its pseudo-inverse
+        Matrix<float, 3, Dynamic> jacobian = calcJacobian(jacobian_step, target_position_vec);
         Matrix<float, 3, 3> jacobian_pseudo_inverse = jacobian.completeOrthogonalDecomposition().pseudoInverse();
         
-
-        // applying nullspace projection to the distance vector
-
-        // Check for joints near limits and adjust distance vector if needed
+        // Apply joint limit constraints
         distance_vector = constrain_joint_positions(distance_vector, current_position, jacobian, jacobian_pseudo_inverse);
-
-
-        // Calculate joint action using pseudo-inverse of Jacobian
+        
+        // Calculate joint actions
         VectorXf joint_action_vec = jacobian_pseudo_inverse * distance_vector;
         
-        // Check if the actual displacement from the last step is very small, i.e we are stuck
-        if ((current_position - last_position).norm() < small_action_threshold) 
-        {
+        // Check if we're stuck in a local minimum
+        if ((current_position - last_position).norm() < small_action_threshold) {
             small_action_count++;
-            if (small_action_count > max_small_joint_action_count) 
-            {
-            // Add a small random perturbation to escape local minimum
+            if (small_action_count > max_small_joint_action_count) {
                 std::cout << "Adding perturbation to escape local minimum" << std::endl;
                 for (int i = 0; i < joint_action_vec.size(); i++) {
-                    // Add random value between -0.05 and 0.05
                     joint_action_vec(i) += ((((float)rand() / RAND_MAX) - 0.5f) * 10.0f);
                 }
-                
-                // // Generate a random direction vector
-                // Vector3f random_direction(
-                //     ((float)rand() / RAND_MAX) - 0.5f,
-                //     ((float)rand() / RAND_MAX) - 0.5f,
-                //     ((float)rand() / RAND_MAX) - 0.5f
-                // );
-                // random_direction.normalize();
-                
-                // // Create a new waypoint closer to target than current position
-                // target_position_vec = ( (target_position_vec + current_position)/2) + (random_direction * distance_vector.norm() * 0.25f);
-                
-                // // Push original target to stack
-                // corrective_joint_trajectorie.push(target_position_vec);
-                
-                small_action_count = 0; // Reset counter after perturbation
-
+                small_action_count = 0;
             }
         } else {
-            small_action_count = 0; // Reset counter if displacement is significant
+            small_action_count = 0;
         }
         
-        // Limit the step size to prevent huge jumps
-        float max_step = 0.5; // Maximum step size in radians
+        // Limit step size
         if (joint_action_vec.norm() > max_step) {
             joint_action_vec = joint_action_vec.normalized() * max_step;
         }
-        // Convert joint_action_vec to a float array
-        float joint_action_array[joint_action_vec.size()];
-        for (int i = 0; i < joint_action_vec.size(); i++) {
-            joint_action_array[i] = joint_action_vec(i);
-        }
-        //writes to servos
+        
+        // Update joint positions
         write_to_joints(joint_action_vec, false);
-
-        // Update last and current position for next iteration
+        
+        // Update positions and calculate new distance vector
         last_position = current_position;
         current_position = get_current_position().cast<float>();
-
-        // updates delta
         distance_vector = get_distance(current_position, target_position_vec);
-
-        std::cout << "current position:\n " << get_current_position() << std::endl;
+        
+        std::cout << "current position:\n " << current_position << std::endl;
         std::cout << "the norm is: " << distance_vector.norm() << std::endl;
         
-        iteration_count++; // Increment iteration count 
-
-        // ---- Break conditions ----
-
-        // Checks for max iterations
         iteration_count++;
-        if (iteration_count >= max_iterations) {
-            std::cout << "Maximum iterations reached without convergence." << std::endl;
-            break;
-        }
-        // Checks if the distance vector is within the margin of error
-        if(distance_vector.norm() < margin_of_error)
-        {
-            break; // No corrective trajectory available, stop movement
-        }
     }
-    while(true); // Continue until the distance vector is within the margin of error
-
-
-    // After getting close with gradient descent, perform random sampling to fine-tune
-    std::cout << "Fine-tuning position with random sampling..." << std::endl;
-    float best_distance = distance_vector.norm();
-    std::vector<float> best_joint_positions = joint_positions;
-
-    // Try 100 random samples around current position
-    for (int sample = 0; sample < 100; sample++) {
-        std::vector<float> sampled_positions = joint_positions;
-        
-        // Create a random perturbation for each joint within limits
-        for (size_t i = 0; i < joint_positions.size(); i++) {
-            float min_angle = servos[i].getMinAngle();
-            float max_angle = servos[i].getMaxAngle();
-            float current = joint_positions[i];
-            
-            // Sample within a smaller range around current position
-            float range = 0.5; // radians
-            float lower_bound = std::max(min_angle, current - range);
-            float upper_bound = std::min(max_angle, current + range);
-            
-            // Generate random position within bounds
-            sampled_positions[i] = lower_bound + ((float)rand() / RAND_MAX) * (upper_bound - lower_bound);
-        }
-        
-        // Calculate position and distance for this sample
-        Vector3f sampled_position = FK(sampled_positions);
-        Vector3f sampled_distance = get_distance(sampled_position, target_position_vec);
-        float distance_norm = sampled_distance.norm();
-        
-        // Keep track of the best sample
-        if (distance_norm < best_distance) {
-            best_distance = distance_norm;
-            best_joint_positions = sampled_positions;
-            std::cout << "Found better position with distance: " << best_distance << std::endl;
-        }
+    
+    if (iteration_count >= max_iterations) {
+        std::cout << "Maximum iterations reached without convergence." << std::endl;
     }
-
-    // Apply the best found position
-    if (best_distance < distance_vector.norm()) {
-        std::cout << "Using best sampled position with distance: " << best_distance << std::endl;
-        // Directly update joint_positions with the best configuration
-        joint_positions = best_joint_positions;
-    }
-}                                   
+}
 
 Vector3f arm::FK(std::vector<float> jointConfig) {
-    // Function to perform forward kinematics
-    Vector3f pos(0, 0, 0); // Start position in end effector frame
-    Ligament* current_ligament = &ee_ligament;
-    int i = 0;
-
     // Start with identity transformation
     Transform<float, 3, Affine> accumulated_transform = Transform<float, 3, Affine>::Identity();
-
+    
+    // Initial position in end effector frame
+    Vector3f pos(0, 0, 0);
+    
+    Ligament* current_ligament = &ee_ligament;
+    
     // Iterate through the ligaments from end effector to base
-    while ( (current_ligament != nullptr) && (i < joint_positions.size()) ) {
+    for (int i = 0; i < jointConfig.size() && current_ligament != nullptr; i++) {
+        // Clamp joint angle to servo limits
+        float joint_angle = std::max(servos[i].getMinAngle(), 
+                                    std::min(jointConfig[i], 
+                                            servos[i].getMaxAngle()));
         
-        // Create rotation transformation using joint angle
-        float joint_angle = jointConfig[i];
-        
-        // Ensure joint angle is within servo limits
-        if (joint_angle < servos[i].getMinAngle()) {
-            joint_angle = servos[i].getMinAngle();
-        } else if (joint_angle > servos[i].getMaxAngle()) {
-            joint_angle = servos[i].getMaxAngle();
-        }
-        
-        // Get rotation axis and translation from the ligament
-        Vector3f rotation_axis = current_ligament->rotation;
-        Vector3f translation = current_ligament->translation;
-        
-        // Build transformation matrix
-        Transform<float, 3, Affine> transform = 
-            AngleAxisf(joint_angle, rotation_axis) * 
-            Translation3f(translation);
-        
-        // Apply this transformation to our accumulated transform
-        accumulated_transform = transform * accumulated_transform;
+        // Build and apply transformation matrix
+        accumulated_transform = 
+            AngleAxisf(joint_angle, current_ligament->rotation) * 
+            Translation3f(current_ligament->translation) * 
+            accumulated_transform;
         
         // Move to the next ligament in the chain
         current_ligament = current_ligament->backward_attachment;
-        i++;
     }
 
     // Apply the accumulated transformation to the initial position
@@ -229,67 +124,45 @@ Vector3f arm::FK(std::vector<float> jointConfig) {
 }
 
 Matrix<float, 3, Dynamic> arm::calcJacobian(float delta, Vector3f target_position_vec) {
-    // Function to calculate Jacobians using central difference method
-
-    Matrix<float, 3, Dynamic> jacobian(3, joint_positions.size()); // 3xN Jacobian matrix where N is the number of joints
-    std::vector<float> jointConfig_plus = joint_positions;
-    std::vector<float> jointConfig_minus = joint_positions;
+    // Calculate Jacobian matrix using central difference method
+    Matrix<float, 3, Dynamic> jacobian(3, joint_positions.size());
+    std::vector<float> config_plus = joint_positions;
+    std::vector<float> config_minus = joint_positions;
     
-    for (int i = 0; i < joint_positions.size(); ++i) { // Loop over each joint
-        float original_angle = jointConfig_plus[i]; // sets the original angle
-
-        // Apply positive and negative deltas
-        jointConfig_plus[i] += delta;
-        jointConfig_minus[i] -= delta;
-
-        // Check if we're close to joint limits and adjust gradient accordingly
-        bool near_upper_limit = (joint_positions[i] > servos[i].getMaxAngle() - 0.1);
-        bool near_lower_limit = (joint_positions[i] < servos[i].getMinAngle() + 0.1);
-
-        Vector3f offset_position_plus, offset_position_minus;
-         // Normal case: use FK to calculate positions
-        offset_position_plus = FK(jointConfig_plus);
-        offset_position_minus = FK(jointConfig_minus);
-
-        if (near_upper_limit || near_lower_limit) {
-
-            offset_position_plus *= 0;
-            offset_position_minus *= 0;
-
-            // float distanceToLimit;
-            // float factor;
-            
-            // if (near_upper_limit) {
-            //     distanceToLimit = servos[i].getMaxAngle() - joint_positions[i];
-            //     // Exponential term that grows as we get closer to the limit
-            //     factor = exp(-4.0f * distanceToLimit) * delta;
-                
-            //     for (int j = 0; j < 3; ++j) {
-            //         offset_position_plus[j] += factor;
-            //         offset_position_minus[j] -= factor;
-            //     }
-            // } else { // near_lower_limit
-            //     distanceToLimit = joint_positions[i] - servos[i].getMinAngle();
-            //     // Exponential term that grows as we get closer to the limit
-            //     factor = exp(-10.0f * distanceToLimit) * delta;
-                
-            //     for (int j = 0; j < 3; ++j) {
-            //         offset_position_plus[j] -= factor;
-            //         offset_position_minus[j] += factor;
-            //     }
-            // }
-        }
+    for (int i = 0; i < joint_positions.size(); ++i) {
+        // Store original angle
+        float original_angle = joint_positions[i];
         
-        // Reset joint angles
-        jointConfig_plus[i] = original_angle;
-        jointConfig_minus[i] = original_angle;
-
-        for (int j = 0; j < 3; ++j) { // Loop over each dimension (x, y, z)
-            // Central difference formula for numerical derivative
-            jacobian(j, i) = (offset_position_plus[j] - offset_position_minus[j]) / (2 * delta);
+        // Check if joint is near limits
+        bool near_upper_limit = (original_angle > servos[i].getMaxAngle() - 0.1);
+        bool near_lower_limit = (original_angle < servos[i].getMinAngle() + 0.1);
+        
+        if (near_upper_limit || near_lower_limit) {
+            // Zero out the Jacobian column if joint is near limits
+            for (int j = 0; j < 3; ++j) {
+                jacobian(j, i) = 0.0f;
+            }
+        } else {
+            // Apply deltas for central difference
+            config_plus[i] = original_angle + delta;
+            config_minus[i] = original_angle - delta;
+            
+            // Calculate positions
+            Vector3f pos_plus = FK(config_plus);
+            Vector3f pos_minus = FK(config_minus);
+            
+            // Compute central difference for each dimension
+            for (int j = 0; j < 3; ++j) {
+                jacobian(j, i) = (pos_plus[j] - pos_minus[j]) / (2 * delta);
+            }
+            
+            // Reset config vectors
+            config_plus[i] = original_angle;
+            config_minus[i] = original_angle;
         }
     }
-    std::cout << "The jacobian is:\n " << jacobian << std::endl;
+    
+    std::cout << "Jacobian:\n" << jacobian << std::endl;
     return jacobian;
 }
 
@@ -347,8 +220,6 @@ arm::~arm()
     // Clean up any resources
     servos.clear();
     joint_positions.clear();
-
-
     
     // Print a message indicating the destructor was called
     std::cout << "Arm destructor called, resources released." << std::endl;
