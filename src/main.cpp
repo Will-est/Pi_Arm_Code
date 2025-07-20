@@ -26,16 +26,16 @@ int main()
 
     float target_position[] = {4.5f, 0.0f, 2.5f};
     myArm.moveToPosition(target_position, 0.25f);
-    std::cout << "my current position is " << myArm.get_current_position() << std::endl;
+    // std::cout << "my current position is " << myArm.get_current_position() << std::endl;
 
-    // Print joint positions
-    const auto& joint_positions = myArm.joint_positions;
-    // Print joint positions
-    std::cout << "Joint positions in degrees:" << std::endl;
-    for (size_t i = 0; i < joint_positions.size(); ++i) {
-        std::cout << "Joint " << i << ": " 
-                  << (joint_positions[i]*(180/PI)) << std::endl;
-    }
+    // // Print joint positions
+    // const auto& joint_positions = myArm.joint_positions;
+    // // Print joint positions
+    // std::cout << "Joint positions in degrees:" << std::endl;
+    // for (size_t i = 0; i < joint_positions.size(); ++i) {
+    //     std::cout << "Joint " << i << ": " 
+    //               << (joint_positions[i]*(180/PI)) << std::endl;
+    // }
  
     while(true)
     {
