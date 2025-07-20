@@ -9,9 +9,9 @@ using namespace Eigen;
 
 #define jacobian_step 0.01
 #define clip_constant 0.1
-#define max_iterations 10000
+#define max_iterations 1000
 #define small_action_threshold 0.001
-#define max_small_joint_action_count 50
+#define max_small_joint_action_count 7
 
 // ------------  ARM Code --------------
 
