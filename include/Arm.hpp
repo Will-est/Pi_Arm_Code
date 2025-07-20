@@ -42,11 +42,11 @@ namespace Arm
             arm(Ligament input_ligament);
             ~arm();
             std::vector<float> joint_positions;
-
-
-        private:
             Ligament ee_ligament;
             std::vector<Servo::servo> servos;
+
+        private:
+        
     };
 
 }

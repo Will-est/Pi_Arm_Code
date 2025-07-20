@@ -1,5 +1,7 @@
 #pragma once
 
+#define PI 3.14159265358979323846
+
 extern bool gpio_init_flag;
 
 namespace Servo
