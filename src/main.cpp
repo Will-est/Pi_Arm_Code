@@ -2,6 +2,7 @@
 #include "Arm.hpp"
 #include <iostream>
 
+
 int main()
 {
     
@@ -18,8 +19,10 @@ int main()
     float eeTranslation[3] = {1.85f, 0.0f, 0.0f};
     Arm::Ligament ee(eeAxis, eeTranslation, nullptr, &rotator);
 
+    float origin_offset[3] = {0.0f, 0.0f, 0.0f};
+
     // Create the arm with the three ligaments
-    Arm::arm myArm(ee);
+    Arm::arm myArm(ee, origin_offset);
 
     float target_position[] = {4.5f, 0.0f, 2.5f};
     myArm.moveToPosition(target_position, 0.25f);
@@ -34,7 +37,6 @@ int main()
                   << (joint_positions[i]*(180/PI)) << std::endl;
     }
  
-    // myArm.write_to_joints(Eigen::VectorXf::Zero(myArm.joint_positions.size()), true);
     while(true)
     {
     }

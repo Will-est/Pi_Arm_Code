@@ -15,7 +15,8 @@ using namespace Eigen;
 
 // ------------  ARM Code --------------
 
-arm::arm(Ligament input_ligament) 
+arm::arm(Ligament input_ligament, float origin_offset[3])
+    : Origin_offset(origin_offset[0], origin_offset[1], origin_offset[2])
 {
     // Set the end-effector ligament
     ee_ligament = input_ligament;
@@ -121,6 +122,8 @@ Vector3f arm::FK(std::vector<float> jointConfig) {
         // Move to the next ligament in the chain
         current_ligament = current_ligament->backward_attachment;
     }
+    // Apply the origin offset to the accumulated transformation
+    accumulated_transform.translation() += Origin_offset;
 
     // Apply the accumulated transformation to the initial position
     return accumulated_transform * pos;

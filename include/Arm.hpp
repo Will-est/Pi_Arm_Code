@@ -39,11 +39,12 @@ namespace Arm
             Eigen::Vector3f constrain_joint_positions(Eigen::Vector3f& distance_vector, const Eigen::Vector3f& current_position, 
                                    const Eigen::Matrix<float, 3, Eigen::Dynamic>& jacobian,
                                    const Eigen::Matrix<float, 3, 3>& jacobian_pseudo_inverse);                                
-            arm(Ligament input_ligament);
+            arm(Ligament input_ligament, float origin_offset[3]);
             ~arm();
             std::vector<float> joint_positions;
-            Ligament ee_ligament;
             std::vector<Servo::servo> servos;
+            Ligament ee_ligament;
+            Eigen::Vector3f Origin_offset;
 
         private:
         
