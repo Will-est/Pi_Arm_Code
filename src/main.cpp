@@ -6,8 +6,8 @@ int main()
 {
     
     // Create three ligaments with specified axes and translation vectors
-    float baseAxis[3] = {0.0f, 0.0f, 2.75f};
-    float baseTranslation[3] = {0.0f, 0.0f, 1.0f};
+    float baseAxis[3] = {0.0f, 0.0f, 1.0f};
+    float baseTranslation[3] = {0.0f, 0.0f, 2.75f};
     Arm::Ligament base(baseAxis, baseTranslation);
     
     float rotatorAxis[3] = {0.0f, 1.0f, 0.0f};
@@ -21,14 +21,14 @@ int main()
     // Create the arm with the three ligaments
     Arm::arm myArm(ee);
 
-    float target_position[] = {4.0f, 3.0f, 0.0f};
+    float target_position[] = {4.5f, 0.0f, 2.5f};
     myArm.moveToPosition(target_position, 0.25f);
     std::cout << "my current position is " << myArm.get_current_position() << std::endl;
 
     // Print joint positions
     const auto& joint_positions = myArm.joint_positions;
     // Print joint positions
-    std::cout << "Joint positions:" << std::endl;
+    std::cout << "Joint positions in degrees:" << std::endl;
     for (size_t i = 0; i < joint_positions.size(); ++i) {
         std::cout << "Joint " << i << ": " 
                   << (joint_positions[i]*(180/PI)) << std::endl;
